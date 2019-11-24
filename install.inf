@@ -4,3 +4,4 @@ desc=
 type=cudatext-plugin
 subdir=cuda_ftp_libs
 homepage=https://github.com/CudaText-addons/cuda_ftp_libs_py36
+os=win
