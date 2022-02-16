@@ -2,6 +2,6 @@
 title=SFTP support for FTP plugin, Windows x32/x64, Python 3.6
 desc=
 type=cudatext-plugin
-subdir=cuda_ftp_libs_py36
+subdir=cuda_ftp_libs
 homepage=https://github.com/CudaText-addons/cuda_ftp_libs_py36
 os=win
