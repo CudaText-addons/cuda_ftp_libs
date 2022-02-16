@@ -21,10 +21,30 @@ from cryptography.hazmat.primitives.ciphers import Cipher
 
 import nacl.signing
 
+import six
+
 from paramiko.message import Message
-from paramiko.pkey import PKey, OPENSSH_AUTH_MAGIC, _unpad_openssh
+from paramiko.pkey import PKey
 from paramiko.py3compat import b
 from paramiko.ssh_exception import SSHException, PasswordRequiredException
+
+
+OPENSSH_AUTH_MAGIC = b"openssh-key-v1\x00"
+
+
+def unpad(data):
+    # At the moment, this is only used for unpadding private keys on disk. This
+    # really ought to be made constant time (possibly by upstreaming this logic
+    # into pyca/cryptography).
+    padding_length = six.indexbytes(data, -1)
+    if 0x20 <= padding_length < 0x7f:
+        return data  # no padding, last byte part comment (printable ascii)
+    if padding_length > 15:
+        raise SSHException("Invalid key")
+    for i in range(padding_length):
+        if six.indexbytes(data, i - padding_length) != i + 1:
+            raise SSHException("Invalid key")
+    return data[:-padding_length]
 
 
 class Ed25519Key(PKey):
@@ -55,9 +75,9 @@ class Ed25519Key(PKey):
             verifying_key = nacl.signing.VerifyKey(msg.get_binary())
         elif filename is not None:
             with open(filename, "r") as f:
-                pkformat, data = self._read_private_key("OPENSSH", f)
+                data = self._read_private_key("OPENSSH", f)
         elif file_obj is not None:
-            pkformat, data = self._read_private_key("OPENSSH", file_obj)
+            data = self._read_private_key("OPENSSH", file_obj)
 
         if filename or file_obj:
             signing_key = self._parse_signing_key_data(data, password)
@@ -135,7 +155,7 @@ class Ed25519Key(PKey):
                 decryptor.update(private_ciphertext) + decryptor.finalize()
             )
 
-        message = Message(_unpad_openssh(private_data))
+        message = Message(unpad(private_data))
         if message.get_int() != message.get_int():
             raise SSHException("Invalid key")
 
@@ -174,13 +194,12 @@ class Ed25519Key(PKey):
         m.add_string(v.encode())
         return m.asbytes()
 
-    @property
-    def _fields(self):
+    def __hash__(self):
         if self.can_sign():
             v = self._signing_key.verify_key
         else:
             v = self._verifying_key
-        return (self.get_name(), v)
+        return hash((self.get_name(), v))
 
     def get_name(self):
         return "ssh-ed25519"
@@ -191,7 +210,7 @@ class Ed25519Key(PKey):
     def can_sign(self):
         return self._signing_key is not None
 
-    def sign_ssh_data(self, data, algorithm=None):
+    def sign_ssh_data(self, data):
         m = Message()
         m.add_string("ssh-ed25519")
         m.add_string(self._signing_key.sign(data).signature)
