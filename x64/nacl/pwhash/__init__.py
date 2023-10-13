@@ -12,9 +12,8 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from __future__ import absolute_import
 
-from nacl.exceptions import InvalidkeyError
+from nacl.exceptions import CryptPrefixError
 
 from . import _argon2, argon2i, argon2id, scrypt
 
@@ -55,7 +54,7 @@ scryptsalsa208sha256_str = scrypt.str
 verify_scryptsalsa208sha256 = scrypt.verify
 
 
-def verify(password_hash, password):
+def verify(password_hash: bytes, password: bytes) -> bool:
     """
     Takes a modular crypt encoded stored password hash derived using one
     of the algorithms supported by `libsodium` and checks if the user provided
@@ -66,10 +65,11 @@ def verify(password_hash, password):
         return argon2id.verify(password_hash, password)
     elif password_hash.startswith(argon2i.STRPREFIX):
         return argon2id.verify(password_hash, password)
-    elif password_hash.startswith(scrypt.STRPREFIX):
+    elif scrypt.AVAILABLE and password_hash.startswith(scrypt.STRPREFIX):
         return scrypt.verify(password_hash, password)
     else:
-        raise(InvalidkeyError("given password_hash is not "
-                              "in a supported format"
-                              )
-              )
+        raise (
+            CryptPrefixError(
+                "given password_hash is not in a supported format"
+            )
+        )

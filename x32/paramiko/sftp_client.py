@@ -344,13 +344,13 @@ class SFTPClient(BaseSFTP, ClosingContextManager):
         ``O_EXCL`` flag in posix.
 
         The file will be buffered in standard Python style by default, but
-        can be altered with the ``bufsize`` parameter.  ``0`` turns off
+        can be altered with the ``bufsize`` parameter.  ``<=0`` turns off
         buffering, ``1`` uses line buffering, and any number greater than 1
         (``>1``) uses that specific buffer size.
 
         :param str filename: name of the file to open
         :param str mode: mode (Python-style) to open in
-        :param int bufsize: desired buffering (-1 = default buffer size)
+        :param int bufsize: desired buffering (default: ``-1``)
         :return: an `.SFTPFile` object representing the open file
 
         :raises: ``IOError`` -- if the file could not be opened.
@@ -758,7 +758,7 @@ class SFTPClient(BaseSFTP, ClosingContextManager):
         with open(localpath, "rb") as fl:
             return self.putfo(fl, remotepath, file_size, callback, confirm)
 
-    def getfo(self, remotepath, fl, callback=None):
+    def getfo(self, remotepath, fl, callback=None, prefetch=True):
         """
         Copy a remote file (``remotepath``) from the SFTP server and write to
         an open file or file-like object, ``fl``.  Any exception raised by
@@ -771,18 +771,23 @@ class SFTPClient(BaseSFTP, ClosingContextManager):
         :param callable callback:
             optional callback function (form: ``func(int, int)``) that accepts
             the bytes transferred so far and the total bytes to be transferred
+        :param bool prefetch:
+            controls whether prefetching is performed (default: True)
         :return: the `number <int>` of bytes written to the opened file object
 
         .. versionadded:: 1.10
+        .. versionchanged:: 2.8
+            Added the ``prefetch`` keyword argument.
         """
         file_size = self.stat(remotepath).st_size
         with self.open(remotepath, "rb") as fr:
-            fr.prefetch(file_size)
+            if prefetch:
+                fr.prefetch(file_size)
             return self._transfer_with_callback(
                 reader=fr, writer=fl, file_size=file_size, callback=callback
             )
 
-    def get(self, remotepath, localpath, callback=None):
+    def get(self, remotepath, localpath, callback=None, prefetch=True):
         """
         Copy a remote file (``remotepath``) from the SFTP server to the local
         host as ``localpath``.  Any exception raised by operations will be
@@ -793,13 +798,17 @@ class SFTPClient(BaseSFTP, ClosingContextManager):
         :param callable callback:
             optional callback function (form: ``func(int, int)``) that accepts
             the bytes transferred so far and the total bytes to be transferred
+        :param bool prefetch:
+            controls whether prefetching is performed (default: True)
 
         .. versionadded:: 1.4
         .. versionchanged:: 1.7.4
             Added the ``callback`` param
+        .. versionchanged:: 2.8
+            Added the ``prefetch`` keyword argument.
         """
         with open(localpath, "wb") as fl:
-            size = self.getfo(remotepath, fl, callback)
+            size = self.getfo(remotepath, fl, callback, prefetch)
         s = os.stat(localpath)
         if s.st_size != size:
             raise IOError(
